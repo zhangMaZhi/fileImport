@@ -1,0 +1,92 @@
+@Override
+	protected void importExcel(HttpServletRequest request, HttpServletResponse response) throws
+			FileNotFoundException, IOException
+	{
+		String jsons = "{title:\"上传失败\"}";
+		JSONObject jsonObject = JSONObject.parseObject(jsons);
+		String json = jsonObject.toString();
+		// 获得磁盘文件条目工厂
+		DiskFileItemFactory factory = new DiskFileItemFactory();
+		// 获取文件�?要上传到的路�?
+		// String path =
+		// request.getSession().getServletContext().getRealPath("/res_upload/res_app");
+		String path = ReadConfig.get("img_dir");
+		if (!new File(path).exists())
+		{
+			new File(path).mkdir();
+		}
+		// 如果没以下两行设置的话，上传大的 文件 会占�? 很多内存�?
+		// 设置暂时存放�? 存储�? , 这个存储室，可以�? �?终存储文�? 的目录不�?
+		/**
+		 * 原理 它是先存�? 暂时存储室，然后在真正写�? 对应目录的硬盘上�? 按理来说 当上传一个文件时，其实是上传了两份，第一个是�?
+		 * .tem 格式�? 然后再将其真正写�? 对应目录的硬盘上
+		 */
+		factory.setRepository(new File(path));
+		// 设置 缓存的大小，当上传文件的容量超过该缓存时，直接放�? 暂时存储�?
+		factory.setSizeThreshold(1024 * 1024);
+
+		// 高水平的API文件上传处理
+		ServletFileUpload upload = new ServletFileUpload(factory);
+
+		try
+		{
+			// 可以上传多个文件
+			List<FileItem> list = (List<FileItem>) upload.parseRequest(request);
+
+			for (FileItem item : list)
+			{
+				// 获取表单的属性名�?
+				String name = item.getFieldName();
+
+				// 如果获取�? 表单信息是普通的 文本 信息
+				if (item.isFormField())
+				{
+					// 获取用户具体输入的字符串 ，名字起得挺好，因为表单提交过来的是 字符串类型的
+					String value = item.getString();
+					request.setAttribute(name, value);
+				}
+				// 对传入的�? �?单的字符串进行处�? ，比如说二进制的 图片，电影这�?
+				else
+				{
+					/**
+					 * 以下三步，主要获�? 上传文件的名�?
+					 */
+					// 获取路径�?
+					String value = item.getName();
+					// 索引到最后一个反斜杠
+					int start = value.lastIndexOf("\\");
+					// 截取 上传文件�? 字符串名字，�?1�? 去掉反斜杠，
+					String filename = value.substring(start + 1);
+
+					request.setAttribute(name, filename);
+
+					// 真正写到磁盘�?
+					// 它抛出的异常 用exception 捕捉
+					filename = System.currentTimeMillis() + "_" + filename;
+					File writeFile = new File(path, filename);
+					if (writeFile.exists())
+					{
+						writeFile.delete();
+						writeFile = new File(path, filename);
+					}
+					item.write(new File(path, filename));// 第三方提供的
+					// item.delete();
+					String url = ReadConfig.get("img_domain") + filename;
+					String title = "上传cdn成功!", md5 = XwhTool.getMd5ByFile(writeFile);
+					json = createResultJson(title, url, md5, writeFile);
+					System.out.println(json);
+					response.getOutputStream().write(json.getBytes("utf-8"));
+				}
+			}
+		}
+		catch (FileUploadException e)
+		{
+			response.getOutputStream().write(json.getBytes("utf-8"));
+			e.printStackTrace();
+		}
+		catch (Exception e)
+		{
+			response.getOutputStream().write(json.getBytes("utf-8"));
+			e.printStackTrace();
+		}
+	}
